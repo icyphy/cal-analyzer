@@ -1,0 +1,35 @@
+/**
+ * In this pattern, there are no finite STA offsets that enable each Update reactor to advance its tag.
+ * A positive value that is the same for both federates won't work because it will delay the outputs by
+ * the same amount, so waiting that amount offers no information about the remote tag. Asymmetric values
+ * won't work either because the federate with the smaller STA will potentially prematurely advance its tag.
+ * This situation is described in the [CAL theorem](https://dl.acm.org/doi/10.1145/3609119) paper, where
+ * the processing offsets go to infinity.
+ *
+ * Note that the centralized coordinator works fine for this case. Each federate periodically notifies
+ * the RTI of the advancement of its _physical_ time without advancing its _logical_ time (something that
+ * cannot be accomplished with null messages sent based on a timer).
+ *
+ * @author Edward A. Lee
+ */
+target C {
+  coordination: decentralized
+}
+reactor Update {
+  input remote: int
+  output out: int
+  state balance: int = 0
+  physical action p
+  reaction(startup) -> p {= =}
+  reaction(p) -> out {=
+  =}
+  reaction(remote) {=
+    self->balance += remote->value;
+  =}
+}
+federated reactor {
+  u1 = new Update()
+  u2 = new Update()
+  u1.out -> u2.remote
+  u2.out -> u1.remote
+}

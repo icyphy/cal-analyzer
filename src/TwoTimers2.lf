@@ -1,0 +1,13 @@
+target C
+
+reactor T(period:time=1 sec, wcet:int=1) {
+    timer t(0, period)
+    reaction(t) {=
+        lf_sleep(self->wcet);
+    =}
+}
+
+main reactor {
+    A = new T(period=2 sec, wcet=3 sec)
+    B = new T(period=1 sec, wcet=1 sec)
+}

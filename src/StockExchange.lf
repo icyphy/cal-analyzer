@@ -1,0 +1,22 @@
+target C {
+  coordination: decentralized
+}
+reactor Client(e_C:time=1 sec) {
+  output order: int
+  physical action p(0, e_C)
+  reaction(p) -> order {=
+    SET(order, 42);
+  =}
+}
+reactor Exchange {
+  input order: int
+  state shares: int
+  reaction(order) {=
+    self->shares += order->value;
+  =}
+}
+federated reactor(c:time=0 sec) {
+  a = new Client()
+  e = new Exchange()
+  a.order -> e.order after c
+}

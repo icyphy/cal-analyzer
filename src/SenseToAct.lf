@@ -1,0 +1,41 @@
+target C {
+    tracing: true,
+    timeout: 5s,
+}
+
+reactor Sensor {
+    output out: int
+    state counter: int = 0
+    timer t(0, 1s)
+    reaction(t) -> out {=
+        self->counter += 1;
+        lf_set(out, self->counter);
+        lf_sleep(MSEC(100));
+    =}
+}
+
+reactor Processor {
+    input in: int
+    output out: int
+    reaction(in) -> out {=
+        lf_set(out, in->value);
+        lf_sleep(MSEC(100));
+    =}
+}
+
+reactor Actuator {
+    input in: int
+    reaction(in) {=
+        printf("Actuator received: %d\n", in->value);
+        lf_sleep(MSEC(100));
+    =}
+}
+
+main reactor {
+    sensor = new Sensor()
+    processor = new Processor()
+    actuator = new Actuator()
+    
+    sensor.out -> processor.in
+    processor.out -> actuator.in
+}

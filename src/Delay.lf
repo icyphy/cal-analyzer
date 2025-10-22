@@ -1,0 +1,38 @@
+target C {
+    timeout: 5s,
+    tracing: true,
+}
+
+reactor A(offset:time=0, period:time=1s) {
+    input in:int
+    output out:int
+    timer t(offset, period)
+    reaction(in, t) -> out {=
+        if (in->is_present) {
+            lf_print("%lld: Received value from input port.", lf_time_logical_elapsed());
+        }
+        long long int logical_time = lf_time_logical_elapsed();
+        // lf_print("DEBUG: logical_time: %lld | offset: %lld | period: %lld", logical_time, self->offset, self->period);
+        if ((logical_time - self->offset) % self->period == 0) {
+            lf_print("%lld: Timer fired", logical_time);
+            lf_set_present(out);
+        }
+        lf_sleep(MSEC(100));
+    =}
+}
+
+reactor B {
+    input in:int
+    output out:int
+    reaction(in) -> out {=
+        lf_set_present(out);
+        lf_sleep(MSEC(100));
+    =}
+}
+
+main reactor {
+    a = new A()
+    b = new B()
+    a.out -> b.in
+    b.out -> a.in after 100ms
+}

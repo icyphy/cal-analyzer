@@ -4,7 +4,7 @@ target C {
     coordination: decentralized,
 }
 
-reactor A(STA: time = 100 ms, offset:time=0, period:time=1s) {
+reactor A(offset:time=0, period:time=1s) {
     input in:int
     output out:int
     timer t(offset, period)
@@ -14,12 +14,17 @@ reactor A(STA: time = 100 ms, offset:time=0, period:time=1s) {
         }
         long long int logical_time = lf_time_logical_elapsed();
         // lf_print("DEBUG: logical_time: %lld | offset: %lld | period: %lld", logical_time, self->offset, self->period);
-        if ((logical_time - self->offset) % self->period == 0) {
+        if ((logical_time - self->offset) % self->period == 0) { // FIXME: Support checking timer presence.
             lf_print("%lld: Timer fired", logical_time);
             lf_set_present(out);
         }
-        // lf_sleep(MSEC(100));
-    =} STAA (0 ms) {=
+    =} 
+    // Tool feedback on right clicking on the reaction: If sum (wcetA + wcetB) <= period,
+    // then there will not be STP violations. This is a feasibility question,
+    // which depends on the rate at which events are generated, i.e., the timer period.
+    // TODO: The dependence on the timer periods suggests that we should do more examples
+    // with multiple timers (e.g., same period but with different offsets).
+    tardy {=
         // STP violation handling code
         if (in->is_present) {
             lf_print("in arrives at t=%lld, T=%lld", lf_time_logical_elapsed(), lf_time_physical_elapsed());
@@ -31,18 +36,49 @@ reactor A(STA: time = 100 ms, offset:time=0, period:time=1s) {
 reactor B {
     input in:int
     output out:int
+    state count:int = 0
     reaction(in) -> out {=
         lf_set_present(out);
+        
+        // Case 1: Feasible (wcetA + wcetB <= period), any maxwait works if there is alignment of events..
+        // If there is no alignment, then forever does not work, but any non-negative, finite maxwait works.
         // lf_sleep(MSEC(100));
+        
+        // Case 2: Infeasible
+        // If there is alignment, and if B produces an output every time, then only maxwait = forever works.
+        // Potential theorem: for any infeasible program, maxwait = forever is the only solution for preventing STP violations.
+        // Tool feedback on under what circumstances does this program deadlock:
+        // if either of the reaction stops producting outputs,
+        // or if any message got lost in the network.
+        // 
         // The following should trigger downstream STP violation.
         // e = 1s also makes the system unfeasible.
-        lf_sleep(MSEC(1100));
+        // lf_sleep(MSEC(1100));
+
+        // Case 3: Feasible but with occasional faults
+        // Insight: Average wcet = 600 ms < period, suggesting that feasibility is about the average, not the worst case.
+        // STP violations depends on the *worst case*, but feasibility depends on the *average case*.
+        // But what about bursts that could shoot up the average execution time?
+        if (self->count++ == 1) {
+            self->count = 0;
+            lf_sleep(MSEC(100));
+        } else {
+            lf_sleep(MSEC(1100));
+        }
     =}
 }
 
 federated reactor {
+    // @maxwait(forever) // Case 1
+    @maxwait(200 ms) // Case 3
     a = new A()
+    @maxwait(0 ms)
     b = new B()
     a.out -> b.in
-    b.out -> a.in after 500ms
+    // Case 0: no alignment. maxwait = 0 works if wcetB < period. maxwait cannot be forever because the program deadlocks.
+    // TODO: Can we formally prove that the program works for any bounded maxwaits?
+    // Lemma: Any lag of A and B will be at least the maxwait chosen.
+    // Lemma: Any bounded maxwait will keep the program alive, but the lag depends on the maxwait chosen for A.
+    // b.out -> a.in after 500 ms
+    b.out -> a.in after 1s // Case 1~3: alignment. Need to select determinism-availability tradeoff.
 }

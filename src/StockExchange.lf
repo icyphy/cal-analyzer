@@ -1,22 +1,71 @@
 target C {
-  coordination: decentralized
+  tracing: true,
+  trace-plugin: {
+    package: "lf-trace-xronos",
+    library: "lf::trace-impl",
+  },
+  coordination: decentralized,
+  keepalive: true,
 }
-reactor Client(e_C:time=1 sec) {
+
+reactor Client(min_spacing:time=300 ms) // Set min_spacing = lambda (200 ms) + runtime overhead (100 ms).
+{
   output order: int
-  physical action p(0, e_C)
-  reaction(p) -> order {=
-    SET(order, 42);
+  // physical action user_response(0): char
+  physical action user_response(0, min_spacing, "drop"): char
+
+  preamble {=
+    // Thread to read input characters until an EOF is received.
+    // Each time a newline is received, schedule a user_response action.
+    void* read_input(void* user_response) {
+      int c;
+      while(1) {
+        while((c = getchar()) != '\n') {
+          if (c == EOF) break;
+        }
+        lf_schedule_copy(user_response, 0, &c, 1);
+        if (c == EOF) break;
+      }
+      return NULL;
+    }
+  =}
+  reaction(startup) -> user_response {=
+    // Start the thread that listens for Enter or Return.
+    lf_thread_t thread_id;
+    lf_thread_create(&thread_id, &read_input, user_response);
+  =}
+  // @wcet("136 usec")
+  reaction(user_response) -> order {=
+    lf_set(order, 42); // Buy 42 shares of a company.
+    lf_print("User: Buying 42 shares.");
+    lf_sleep(MSEC(100));
   =}
 }
-reactor Exchange {
+
+reactor Exchange(max_lag_allowed:time = 6 ms) {
   input order: int
   state shares: int
+  state rate_limit_exceeded: bool = false
+  // @wcet("87 usec")
   reaction(order) {=
-    self->shares += order->value;
+    interval_t current_lag = lf_time_physical() - lf_time_logical();
+    lf_sleep(MSEC(200));
+    if (!self->rate_limit_exceeded) {
+      if (current_lag > self->max_lag_allowed) {
+        lf_print("Exchange: Rate limit exceeded! Disconnecting the user. Current lag: %lld ns", current_lag);
+        self->rate_limit_exceeded = true;
+        return;
+      }
+      self->shares += order->value;
+      lf_print("Exchange: Current shares: %d, current lag: %lld ns", self->shares, current_lag);
+    } else {
+      lf_print("Exchange: Rate limit exceeded. Service rejected. Current lag: %lld ns", current_lag);
+    }
   =}
 }
-federated reactor(c:time=0 sec) {
-  a = new Client()
-  e = new Exchange()
-  a.order -> e.order after c
+
+main reactor {
+  client = new Client()
+  exchange = new Exchange()
+  client.order -> exchange.order
 }

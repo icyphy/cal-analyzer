@@ -42,7 +42,9 @@ reactor Client(min_spacing:time=300 ms) // Set min_spacing = lambda (200 ms) + r
   =}
 }
 
-reactor Exchange(max_lag_allowed:time = 6 ms) {
+// max_lag_allowed must be greater than execution time of client.
+// Otherwise the service is rejected every time.
+reactor Exchange(max_lag_allowed:time = 200 ms) { 
   input order: int
   state shares: int
   state rate_limit_exceeded: bool = false

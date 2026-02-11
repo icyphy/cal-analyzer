@@ -1,0 +1,52 @@
+target C {
+    tracing: true,
+    trace-plugin: {
+        package: "lf-trace-xronos",
+        library: "lf::trace-impl",
+    },
+    coordination: decentralized,
+}
+
+reactor Controller(offset:time=0, period:time=1s) {
+    input in:int
+    output out:int
+    output control:int
+    timer t(offset, period)
+    reaction(in, t) -> out, control {=
+        long long int logical_time = lf_time_logical_elapsed();
+        if ((logical_time - self->offset) % self->period == 0) { // Checking timer presence.
+            lf_print("t=%lld: Timer fired", logical_time);
+            lf_set_present(out);
+        }
+    =}
+    tardy {=
+        // STP violation handling code
+        if (in->is_present) {
+            lf_print("[ERROR] STP violation due to input @ t=%lld, T=%lld", lf_time_logical_elapsed(), lf_time_physical_elapsed());
+        }
+    =}
+}
+
+reactor Sensor {
+    input in:int
+    output out:int
+    state count:int = 0
+    reaction(in) -> out {=
+        lf_set_present(out);
+        // Feasible but with occasional faults: 1 in every 3 sensor outputs takes a long time.
+        if (self->count++ == 2) {
+            self->count = 0;
+            lf_sleep(MSEC(1100)); // Abnormal
+        } else {
+            lf_sleep(MSEC(100));  // Normal
+        }
+    =}
+}
+
+federated reactor {
+    @maxwait(121 ms)
+    controller = new Controller()
+    sensor = new Sensor()
+    controller.out -> sensor.in
+    sensor.out -> controller.in after 1s // Alignment. Need to select determinism-availability tradeoff.
+}

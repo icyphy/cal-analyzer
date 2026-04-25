@@ -1,1 +1,9 @@
 .ipynb_checkpoints
+__pycache__/
+src-gen/
+.DS_Store
+bin/
+fed-gen/
+include/
+node_modules/
+notebooks/html/

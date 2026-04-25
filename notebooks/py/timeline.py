@@ -169,7 +169,7 @@ def write_timeline_to_file(
     logical_time_history: Sequence[float] | None = None,
     execution_time_history: Sequence[Sequence[float]] | None = None,
     reaction_names: Sequence[str] | None = None,
-    filename: str = "reaction-timeline.html",
+    filename: str = "../html/reaction-timeline.html",
     title: str = "CAL Timeline",
     subtitle: str = "Timeline showing reaction firing times, logical times, lag, and execution times.",
 ) -> str:
@@ -183,6 +183,7 @@ def write_timeline_to_file(
         subtitle,
     )
     path = Path(filename).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(html, encoding="utf-8")
     print(f"Timeline saved to: {path}")
     return str(path)

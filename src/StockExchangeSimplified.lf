@@ -1,0 +1,56 @@
+/**
+ * This simplified version is used to generate an illustrative diagram in the thesis.
+ * Use StockExchange.lf for the actual demo.
+ */
+target C {
+  tracing: true,
+  trace-plugin: {
+    package: "lf-trace-xronos",
+    library: "lf::trace-impl",
+  },
+  coordination: decentralized,
+  keepalive: true,
+}
+
+reactor Client
+{
+  output order: int
+  // physical action user_response(0): char
+  physical action user_response(0, 2ms): char
+
+  preamble {=
+    // Thread to read input characters until an EOF is received.
+    // Each time a newline is received, schedule a user_response action.
+    void* read_input(void* user_response) {
+      int c;
+      while(1) {
+        while((c = getchar()) != '\n') {
+          if (c == EOF) break;
+        }
+        lf_schedule_copy(user_response, 0, &c, 1);
+        if (c == EOF) break;
+      }
+      return NULL;
+    }
+  =}
+
+  reaction(user_response) -> order {=
+    lf_set(order, 42);
+  =}
+}
+
+// max_lag_allowed must be greater than execution time of client.
+// Otherwise the service is rejected every time.
+reactor Exchange(max_lag_allowed:time = 200 ms) { 
+  input order: int
+  state shares: int
+  reaction(order) {=
+    self->shares += order->value;
+  =}
+}
+
+main reactor {
+  client = new Client()
+  exchange = new Exchange()
+  client.order -> exchange.order
+}

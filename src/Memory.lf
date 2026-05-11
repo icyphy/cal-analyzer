@@ -1,0 +1,21 @@
+target C
+
+reactor A {
+    output out:int
+    timer t(0, 1s)
+    @label("Execution time = 20 s")
+    reaction(t) -> out {=
+        lf_sleep(20);
+    =}
+}
+
+reactor B {
+    input in:int 
+    reaction(in) {==}
+}
+
+main reactor {
+    a = new A()
+    b = new B()
+    a.out -> b.in after 10 s
+}

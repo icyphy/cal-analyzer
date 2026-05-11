@@ -1,0 +1,32 @@
+target C
+
+reactor A {
+  state s:int = 0
+  // offset = 0, period = 1s
+  timer t(0, 1s)
+  reaction(t) {=
+    /* C code here */
+    self->s++;
+  =}
+  // asynchronous event
+  physical action a
+  output out:int
+  reaction(a) -> out {=
+  	/* C code here */
+    lf_set(out, self->s);
+  =}
+}
+
+reactor B {
+  input in:int
+  reaction(in) {=
+    /* C code here */
+  	printf("%d\n", in->value);
+  =}
+}
+
+main reactor {
+  a = new A()
+  b = new B()
+  a.out -> b.in
+}
